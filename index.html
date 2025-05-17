@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>사진 PDF 만들기</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #f7f7f7;
+      padding: 2rem;
+    }
+    .layout-area {
+      display: grid;
+      width: 794px;
+      height: 1123px;
+      margin: 1rem auto;
+      background: white;
+      border: 1px solid #ccc;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      gap: 8px;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .slot {
+      border: 1px dashed #aaa;
+      background-color: #f0f0f0;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .slot img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      background-color: white;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      margin: 0.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>사진 레이아웃 PDF 만들기</h1>
+  <label>사진 개수:
+    <select id="layout">
+      <option value="2">2장</option>
+      <option value="4" selected>4장</option>
+      <option value="6">6장</option>
+      <option value="8">8장</option>
+    </select>
+  </label>
+  <br>
+  <button id="previewBtn">PDF 미리보기</button>
+  <button id="downloadBtn">PDF 다운로드</button>
+
+  <div class="layout-area" id="layoutArea"></div>
+  <div id="inputs"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    const layoutSelect = document.getElementById("layout");
+    const layoutArea = document.getElementById("layoutArea");
+    const inputsContainer = document.getElementById("inputs");
+
+    let fileCounter = 0;
+    let lastGeneratedDate = getTodayString();
+
+    function getTodayString() {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}${mm}${dd}`;
+    }
+
+    function generateFilename() {
+      const currentDate = getTodayString();
+      if (currentDate !== lastGeneratedDate) {
+        fileCounter = 0;
+        lastGeneratedDate = currentDate;
+      }
+      const count = String(fileCounter).padStart(3, '0');
+      return `photo_${currentDate}_${count}.pdf`;
+    }
+
+    async function generatePDFBlob() {
+      const canvas = await html2canvas(layoutArea, { scale: 2 });
+      const imgData = canvas.toDataURL("image/jpeg", 1.0);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "pt", "a4");
+      pdf.addImage(imgData, "JPEG", 0, 0, 595.28, 841.89);
+      return pdf.output("blob");
+    }
+
+    document.getElementById("previewBtn").addEventListener("click", async () => {
+      const filename = generateFilename();
+      const blob = await generatePDFBlob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      fileCounter++;
+    });
+
+    document.getElementById("downloadBtn").addEventListener("click", async () => {
+      const filename = generateFilename();
+      const blob = await generatePDFBlob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      fileCounter++;
+    });
+
+    function createLayout(count) {
+      layoutArea.innerHTML = '';
+      inputsContainer.innerHTML = '';
+
+      const cols = count === 2 ? 1 : 2;
+      const rows = Math.ceil(count / cols);
+
+      layoutArea.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      layoutArea.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+      for (let i = 0; i < count; i++) {
+        const slot = document.createElement("div");
+        slot.className = "slot";
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "image/*";
+        fileInput.id = `file-${i}`;
+
+        fileInput.addEventListener("change", (e) => {
+          const file = e.target.files[0];
+          const reader = new FileReader();
+          reader.onload = () => {
+            let existingImg = slot.querySelector("img");
+            if (!existingImg) {
+              existingImg = document.createElement("img");
+              slot.appendChild(existingImg);
+            }
+            existingImg.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        });
+
+        inputsContainer.appendChild(fileInput);
+        slot.addEventListener("click", () => fileInput.click());
+        layoutArea.appendChild(slot);
+      }
+    }
+
+    layoutSelect.addEventListener("change", () => {
+      createLayout(parseInt(layoutSelect.value));
+    });
+
+    // 초기 렌더
+    createLayout(parseInt(layoutSelect.value));
+  </script>
+</body>
+</html>
